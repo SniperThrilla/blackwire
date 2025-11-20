@@ -1,12 +1,14 @@
 mod client;
 mod net;
+mod protocol;
 
 use client::acceptor::accept_new_clients;
 use client::table::{ClientTable, SharedClientTable};
 use crossbeam_channel::{Receiver, Sender};
 use net::tap::{TapDevice, read_from_tap, write_to_tap};
+use protocol::auth::{Auth, SharedAuth};
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 pub type ByteSender = Sender<Vec<u8>>;
@@ -20,9 +22,11 @@ fn main() -> io::Result<()> {
 
     let table: SharedClientTable = Arc::new(ClientTable::new());
 
+    let auth: SharedAuth = Arc::new(Mutex::new(Auth::new("/etc/blackwire")?));
+
     let (tap_tx, tap_rx) = crossbeam_channel::unbounded::<Vec<u8>>();
 
-    start_threads(table, tap_tx, tap_rx, tap);
+    start_threads(table, tap_tx, tap_rx, tap, auth);
 
     loop {}
 }
@@ -50,10 +54,11 @@ fn start_threads(
     tap_tx: ByteSender,
     tap_rx: ByteReceiver,
     tap: TapHandle,
+    auth: SharedAuth,
 ) {
     let table_for_accepter = Arc::clone(&table);
     thread::spawn(move || {
-        accept_new_clients(table_for_accepter, tap_tx);
+        accept_new_clients(table_for_accepter, tap_tx, auth);
     });
 
     let table_for_writer = Arc::clone(&table);

@@ -1,12 +1,13 @@
 use crate::ByteSender;
 use crate::client::handler::client_thread;
 use crate::client::table::SharedClientTable;
+use crate::protocol::auth::SharedAuth;
 
 use std::net::TcpListener;
 use std::sync::Arc;
 use std::thread;
 
-pub fn accept_new_clients(table: SharedClientTable, tap_tx: ByteSender) {
+pub fn accept_new_clients(table: SharedClientTable, tap_tx: ByteSender, auth: SharedAuth) {
     // Accept new clients, these are clients joining the LAN
     let port = 9000;
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).unwrap();
@@ -19,8 +20,15 @@ pub fn accept_new_clients(table: SharedClientTable, tap_tx: ByteSender) {
 
                 let table_for_client = Arc::clone(&table);
                 let tap_tx_for_client = tap_tx.clone();
+                let auth_for_client = Arc::clone(&auth);
                 thread::spawn(move || {
-                    client_thread(sock, table_for_client, tap_tx_for_client);
+                    match client_thread(sock, table_for_client, tap_tx_for_client, auth_for_client)
+                    {
+                        Ok(_) => {}
+                        Err(e) => {
+                            println!("A client has errored: {}", e);
+                        }
+                    }
                 });
             }
             Err(e) => {
