@@ -1,12 +1,13 @@
 use crate::client::table::SharedClientTable;
 use crate::client::types::ClientInfo;
-use crate::protocol::auth::SharedAuth;
-use crate::protocol::noise::server::server_handshake;
-use crate::protocol::noise::util::{recv_decrypted, send_encrypted};
 use crate::{ByteReceiver, ByteSender};
+use protocol::auth::SharedAuth;
+use protocol::framing::{ControlType, frame_control, frame_ethernet};
+use protocol::noise::server::server_handshake;
+use protocol::noise::util::{recv_decrypted, send_encrypted};
 use snow::{Keypair, TransportState};
 use std::io;
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -28,8 +29,8 @@ pub fn client_thread(
     let server_keypair = {
         let a = auth.lock().unwrap();
         Keypair {
-            public: a.server_keypair.public.clone(),
-            private: a.server_keypair.private.clone(),
+            public: a.keypair.public.clone(),
+            private: a.keypair.private.clone(),
         }
     };
 
@@ -43,6 +44,9 @@ pub fn client_thread(
     {
         let locked_auth = auth.lock().unwrap();
         if !locked_auth.is_allowed(&client_static) {
+            sock.shutdown(Shutdown::Both).ok();
+            table.remove(ci.mac);
+            drop(sock);
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "Unauthorized client",
@@ -51,7 +55,7 @@ pub fn client_thread(
     }
 
     // Perform BlackWire handshake.
-    client_negotiation();
+    client_negotiation(&ci, &wrapped_transport, &mut sock)?;
 
     // Client is now ready to start transmitting data!
     // The event loop just deals with encrypting and forwarding to the client.
@@ -66,8 +70,16 @@ pub fn client_thread(
     Ok(())
 }
 
-fn client_negotiation() {
-    todo!();
+fn client_negotiation(
+    ci: &Arc<ClientInfo>,
+    transport: &Arc<Mutex<TransportState>>,
+    mut sock: &mut TcpStream,
+) -> io::Result<()> {
+    // Send MAC address to the client.
+    let mac_frame = frame_control(ControlType::AssignMac, &ci.mac);
+    let mut guard = transport.lock().unwrap();
+    send_encrypted(&mut sock, &mut guard, &mac_frame)?;
+    Ok(())
 }
 
 fn client_write(
@@ -77,7 +89,8 @@ fn client_write(
 ) {
     for frame in data_stream.iter() {
         let mut guard = transport.lock().unwrap();
-        let _ = send_encrypted(&mut sock, &mut guard, frame.as_slice());
+        let framed = frame_ethernet(&frame);
+        let _ = send_encrypted(&mut sock, &mut guard, &framed);
     }
 }
 

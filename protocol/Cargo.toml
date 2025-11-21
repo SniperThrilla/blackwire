@@ -1,0 +1,9 @@
+[package]
+name = "protocol"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+snow = "0.10"
+byteorder = "1"
+hex = "0.4"

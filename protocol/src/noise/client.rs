@@ -1,4 +1,4 @@
-use crate::protocol::noise::util::{NOISE_PARAMS, read_msg, write_msg};
+use crate::noise::util::{NOISE_PARAMS, read_msg, write_msg};
 use snow::{Builder, Keypair, TransportState};
 use std::io;
 use std::net::TcpStream;

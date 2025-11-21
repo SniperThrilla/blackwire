@@ -1,7 +1,7 @@
 use crate::ByteSender;
 use crate::client::handler::client_thread;
 use crate::client::table::SharedClientTable;
-use crate::protocol::auth::SharedAuth;
+use protocol::auth::SharedAuth;
 
 use std::net::TcpListener;
 use std::sync::Arc;

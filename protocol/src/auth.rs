@@ -1,5 +1,5 @@
 use snow::{Builder, Keypair};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -7,15 +7,15 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 const NOISE_PARAMS: &str = "Noise_IK_25519_ChaChaPoly_BLAKE2s";
-const PRIV_FILE: &str = "server_private.key";
-const PUB_FILE: &str = "server_public.key";
-const ALLOWED_DIR: &str = "allowed_clients";
+const PRIV_FILE: &str = "private.key";
+const PUB_FILE: &str = "public.key";
+const ALLOWED_DIR: &str = "allowed/";
 
 pub type SharedAuth = Arc<Mutex<Auth>>;
 
 pub struct Auth {
-    pub server_keypair: Keypair,
-    pub allowed_clients: HashSet<Vec<u8>>,
+    pub keypair: Keypair,
+    pub allowed: HashMap<String, Vec<u8>>,
     base: PathBuf,
     last_loaded: SystemTime,
 }
@@ -39,11 +39,11 @@ impl Auth {
         let allowed_path = base.join(ALLOWED_DIR);
 
         // Read in all the clients.
-        let (set, mtime) = load_allowed_clients_with_mtime(&allowed_path)?;
+        let (map, mtime) = load_allowed_clients_with_mtime(&allowed_path)?;
 
         Ok(Self {
-            server_keypair: kp,
-            allowed_clients: set,
+            keypair: kp,
+            allowed: map,
             base,
             last_loaded: mtime,
         })
@@ -59,8 +59,8 @@ impl Auth {
         let m = fs::metadata(&allowed_path)?.modified()?;
 
         if m > self.last_loaded {
-            let (set, mtime) = load_allowed_clients_with_mtime(&allowed_path)?;
-            self.allowed_clients = set;
+            let (map, mtime) = load_allowed_clients_with_mtime(&allowed_path)?;
+            self.allowed = map;
             self.last_loaded = mtime;
             println!("Reloaded allowed client keys");
         }
@@ -69,26 +69,35 @@ impl Auth {
     }
 
     pub fn is_allowed(&self, key: &[u8]) -> bool {
-        self.allowed_clients.contains(key)
+        self.allowed.values().any(|k| k.as_slice() == key)
+    }
+
+    pub fn get_pub(&self, key: String) -> Option<&[u8]> {
+        self.allowed.get(&key).map(|v| v.as_slice())
     }
 }
 
-fn load_allowed_clients_with_mtime(dir: &Path) -> io::Result<(HashSet<Vec<u8>>, SystemTime)> {
-    let mut set = HashSet::new();
+fn load_allowed_clients_with_mtime(
+    dir: &Path,
+) -> io::Result<(HashMap<String, Vec<u8>>, SystemTime)> {
+    let mut map = HashMap::new();
 
     if dir.exists() {
         for entry in fs::read_dir(dir)? {
-            let path = entry?.path();
+            let entry = entry?;
+            let path = entry.path();
             if path.is_file() {
+                let filename = entry.file_name().into_string().unwrap_or_default();
+
                 if let Ok(data) = read_hex(&path) {
-                    set.insert(data);
+                    map.insert(filename, data);
                 }
             }
         }
     }
 
     let mtime = fs::metadata(dir)?.modified()?;
-    return Ok((set, mtime));
+    return Ok((map, mtime));
 }
 
 fn read_hex(path: &Path) -> io::Result<Vec<u8>> {

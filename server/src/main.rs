@@ -1,6 +1,5 @@
 mod client;
 mod net;
-mod protocol;
 
 use client::acceptor::accept_new_clients;
 use client::table::{ClientTable, SharedClientTable};

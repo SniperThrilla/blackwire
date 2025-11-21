@@ -54,7 +54,7 @@ pub fn read_from_tap(tap: TapHandle, table: SharedClientTable) {
             }
         }
 
-        println!("Recieved packet: {:02x?}", &buf[..]);
+        //println!("Recieved packet: {:02x?}", &buf[..]);
 
         // Inspect the MAC to see which client it should go to.
         let mac: Mac = [0u8; 6]; // TODO: Actually read the MAC.
@@ -67,7 +67,7 @@ pub fn read_from_tap(tap: TapHandle, table: SharedClientTable) {
                 }
             };
         } else {
-            println!("Unknown recipient (likely broadcast traffic)");
+            //println!("Unknown recipient (likely broadcast traffic)");
         }
     }
 }
