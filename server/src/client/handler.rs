@@ -2,9 +2,12 @@ use crate::client::table::SharedClientTable;
 use crate::client::types::ClientInfo;
 use crate::{ByteReceiver, ByteSender};
 use protocol::auth::SharedAuth;
-use protocol::framing::{ControlType, frame_control, frame_ethernet};
+use protocol::framing::{
+    ControlType, OpCode, classify_frame, frame_control, frame_ethernet, parse_control_frame,
+};
 use protocol::noise::server::server_handshake;
-use protocol::noise::util::{recv_decrypted, send_encrypted};
+use protocol::noise::util::{recv_ciphertext, safe_decrypt, safe_encrypt, send_ciphertext};
+use protocol::ok_or_continue;
 use snow::{Keypair, TransportState};
 use std::io;
 use std::net::{Shutdown, TcpStream};
@@ -77,8 +80,9 @@ fn client_negotiation(
 ) -> io::Result<()> {
     // Send MAC address to the client.
     let mac_frame = frame_control(ControlType::AssignMac, &ci.mac);
-    let mut guard = transport.lock().unwrap();
-    send_encrypted(&mut sock, &mut guard, &mac_frame)?;
+
+    let ciphertext = safe_encrypt(&transport, &mac_frame)?;
+    send_ciphertext(&mut sock, &ciphertext)?;
     Ok(())
 }
 
@@ -88,9 +92,9 @@ fn client_write(
     transport: Arc<Mutex<TransportState>>,
 ) {
     for frame in data_stream.iter() {
-        let mut guard = transport.lock().unwrap();
         let framed = frame_ethernet(&frame);
-        let _ = send_encrypted(&mut sock, &mut guard, &framed);
+        let ciphertext = ok_or_continue!(safe_encrypt(&transport, &framed));
+        let _ = send_ciphertext(&mut sock, &ciphertext);
     }
 }
 
@@ -100,13 +104,27 @@ fn client_read(
     transport: Arc<Mutex<TransportState>>,
 ) {
     loop {
-        let mut guard = transport.lock().unwrap();
-        match recv_decrypted(&mut sock, &mut guard) {
-            Ok(plain) => tap_channel.send(plain).unwrap(),
-            Err(_) => {
-                println!("Client disconnected or tampered");
-                break;
+        // Read and decrypt message from TcpStream
+        let ciphertext = ok_or_continue!(recv_ciphertext(&mut sock));
+        let plaintext = ok_or_continue!(safe_decrypt(&transport, &ciphertext));
+
+        // Classify message
+        match ok_or_continue!(classify_frame(&plaintext)) {
+            OpCode::Control => {
+                let (ctrl_type, payload) = ok_or_continue!(parse_control_frame(&plaintext));
+                match ctrl_type {
+                    ControlType::Handshake => {}
+                    ControlType::AssignMac => {}
+                    ControlType::Pong => {}
+                }
             }
+
+            OpCode::Ethernet => {
+                // Send this to TAP
+                let ethernet = &plaintext[1..];
+                ok_or_continue!(tap_channel.send(Vec::from(ethernet)));
+            }
+            OpCode::IP => {}
         }
     }
 }

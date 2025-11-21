@@ -43,6 +43,10 @@ impl ClientTable {
         lock.keys().cloned().collect()
     }
 
+    pub fn all_senders(&self) -> Vec<Arc<ClientInfo>> {
+        self.map.lock().unwrap().values().cloned().collect()
+    }
+
     pub fn add_new_client(&self, addr: SocketAddr, bs: ByteSender) -> Arc<ClientInfo> {
         let mac = self.generate_unique_mac();
         let info = ClientInfo {

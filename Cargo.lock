@@ -136,6 +136,7 @@ dependencies = [
  "protocol",
  "rand",
  "snow",
+ "tap",
 ]
 
 [[package]]
@@ -447,6 +448,7 @@ dependencies = [
  "protocol",
  "rand",
  "snow",
+ "tap",
 ]
 
 [[package]]
@@ -498,6 +500,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "tap"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "nix",
 ]
 
 [[package]]

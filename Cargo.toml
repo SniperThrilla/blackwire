@@ -3,5 +3,6 @@ members = [
   "client",
   "server",
   "protocol",
+  "tap",
 ]
 resolver = "2"

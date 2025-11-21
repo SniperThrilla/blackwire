@@ -4,19 +4,18 @@ mod net;
 use client::acceptor::accept_new_clients;
 use client::table::{ClientTable, SharedClientTable};
 use crossbeam_channel::{Receiver, Sender};
-use net::tap::{TapDevice, read_from_tap, write_to_tap};
+use net::tap::{read_from_tap, write_to_tap};
 use protocol::auth::{Auth, SharedAuth};
 use std::io;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use tap::Tap;
 
 pub type ByteSender = Sender<Vec<u8>>;
 pub type ByteReceiver = Receiver<Vec<u8>>;
-type TapHandle = Arc<Box<dyn TapDevice>>;
+type TapHandle = Arc<Tap>;
 
 fn main() -> io::Result<()> {
-    println!("Hello, world!");
-
     let tap: TapHandle = Arc::new(setup().unwrap());
 
     let table: SharedClientTable = Arc::new(ClientTable::new());
@@ -30,19 +29,23 @@ fn main() -> io::Result<()> {
     loop {}
 }
 
-fn setup() -> io::Result<Box<dyn TapDevice>> {
+fn setup() -> io::Result<Tap> {
     println!("Setting up devices");
 
-    let tap = net::tap::create_tap("bw0")?;
+    let tap = Tap::new("bw0")?;
+    tap.set_mtu(1400)?;
+    tap.up()?;
 
     println!("Created device `bw0`");
 
     #[cfg(target_os = "linux")]
     {
         net::bridge::linux::create("br0")?;
-        net::bridge::linux::add_interface("br0", tap.name())?;
+        net::bridge::linux::add_interface("br0", tap.ifname())?;
+        net::bridge::linux::add_interface("br0", "eth0")?;
         net::bridge::linux::up("br0")?;
-        net::bridge::linux::up(tap.name())?;
+        net::bridge::linux::up(tap.ifname())?;
+        net::bridge::linux::up("eth0")?;
     }
 
     Ok(tap)
