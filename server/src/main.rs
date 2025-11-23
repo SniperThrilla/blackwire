@@ -16,7 +16,10 @@ pub type ByteReceiver = Receiver<Vec<u8>>;
 type TapHandle = Arc<Tap>;
 
 fn main() -> io::Result<()> {
-    let tap: TapHandle = Arc::new(setup().unwrap());
+    let ethernet_nic = "enp0s20f0u2";
+    let port = 52123;
+
+    let tap: TapHandle = Arc::new(setup(ethernet_nic).unwrap());
 
     let table: SharedClientTable = Arc::new(ClientTable::new());
 
@@ -24,12 +27,12 @@ fn main() -> io::Result<()> {
 
     let (tap_tx, tap_rx) = crossbeam_channel::unbounded::<Vec<u8>>();
 
-    start_threads(table, tap_tx, tap_rx, tap, auth);
+    start_threads(table, tap_tx, tap_rx, tap, auth, port);
 
     loop {}
 }
 
-fn setup() -> io::Result<Tap> {
+fn setup(nic: &str) -> io::Result<Tap> {
     println!("Setting up devices");
 
     let tap = Tap::new("bw0")?;
@@ -42,7 +45,7 @@ fn setup() -> io::Result<Tap> {
     {
         net::bridge::linux::create("br0")?;
         net::bridge::linux::add_interface("br0", tap.ifname())?;
-        net::bridge::linux::add_interface("br0", "eth0")?;
+        net::bridge::linux::add_interface("br0", nic)?;
         net::bridge::linux::up("br0")?;
         net::bridge::linux::up(tap.ifname())?;
         net::bridge::linux::up("eth0")?;
@@ -57,10 +60,11 @@ fn start_threads(
     tap_rx: ByteReceiver,
     tap: TapHandle,
     auth: SharedAuth,
+    port: u32,
 ) {
     let table_for_accepter = Arc::clone(&table);
     thread::spawn(move || {
-        accept_new_clients(table_for_accepter, tap_tx, auth);
+        accept_new_clients(table_for_accepter, tap_tx, auth, port);
     });
 
     let table_for_writer = Arc::clone(&table);

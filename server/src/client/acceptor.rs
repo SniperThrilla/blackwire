@@ -7,9 +7,13 @@ use std::net::TcpListener;
 use std::sync::Arc;
 use std::thread;
 
-pub fn accept_new_clients(table: SharedClientTable, tap_tx: ByteSender, auth: SharedAuth) {
+pub fn accept_new_clients(
+    table: SharedClientTable,
+    tap_tx: ByteSender,
+    auth: SharedAuth,
+    port: u32,
+) {
     // Accept new clients, these are clients joining the LAN
-    let port = 9000;
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).unwrap();
     println!("Listening on port {}", port);
 
