@@ -1,23 +1,19 @@
 use std::io;
 use std::process::Command;
 
-pub fn create(name: &str) -> io::Result<()> {
-    Command::new("ip")
-        .args(["link", "add", name, "type", "bridge"])
+pub fn add_qdisc(name: &str) -> io::Result<()> {
+    Command::new("tc")
+        .args(["qdisc", "add", "dev", name, "clsact"])
         .status()?;
     Ok(())
 }
 
-pub fn add_interface(bridge: &str, iface: &str) -> io::Result<()> {
-    Command::new("ip")
-        .args(["link", "set", iface, "master", bridge])
-        .status()?;
-    Ok(())
-}
-
-pub fn up(name: &str) -> io::Result<()> {
-    Command::new("ip")
-        .args(["link", "set", name, "up"])
+pub fn mirror_traffic(nic_a: &str, nic_b: &str) -> io::Result<()> {
+    Command::new("tc")
+        .args([
+            "filter", "add", "dev", nic_a, "ingress", "matchall", "action", "mirred", "egress",
+            "mirror", "dev", nic_b,
+        ])
         .status()?;
     Ok(())
 }

@@ -43,12 +43,10 @@ fn setup(nic: &str) -> io::Result<Tap> {
 
     #[cfg(target_os = "linux")]
     {
-        net::bridge::linux::create("br0")?;
-        net::bridge::linux::add_interface("br0", tap.ifname())?;
-        net::bridge::linux::add_interface("br0", nic)?;
-        net::bridge::linux::up("br0")?;
-        net::bridge::linux::up(tap.ifname())?;
-        net::bridge::linux::up("eth0")?;
+        net::bridge::linux::add_qdisc("bw0")?;
+        net::bridge::linux::add_qdisc(nic)?;
+        net::bridge::linux::mirror_traffic("bw0", nic)?;
+        net::bridge::linux::mirror_traffic(nic, "bw0")?;
     }
 
     Ok(tap)
